@@ -10,7 +10,12 @@ def get_labels(dataset_name):
                 4:'party_cracker',5:'peas',6:'tomato_paste',
                 7:'water', 8:'potato_soup', 9:'pringles',
                 10:'salt',11:'crackers', 12:'lemon', 13:'orange_drink',
-                14:'banana_milk'}
+                14:'banana_milk', 15:'apple', 16:'cappucino', 17:'chocolate_cookies',
+                18:'egg', 19:'paper', 20:'red_bowl', 21:'sponge', 22:'paprika',
+                23:'pear', 24:'potato', 25:'bread', 26:'white_bowl', 27:'basket',
+                28:'cloth', 29:'noodles', 30:'towel', 31:'plate', 32:'bag',
+                33:'fork_spoon_knife'}
+                #missing pepper
     else:
         raise Exception('Invalid dataset name')
 
