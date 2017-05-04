@@ -1,9 +1,9 @@
 from XML_parser import XMLParser
-from keras.callbacks import ModelCheckpoint, CSVLogger
 from image_generator import ImageGenerator
-from models import simpler_CNN
 from utils import split_data
 from utils import get_labels
+from utils import display_image
+import numpy as np
 
 dataset_name = 'german_open_2017'
 batch_size = 10
@@ -31,25 +31,12 @@ image_generator = ImageGenerator(ground_truth_data, batch_size, input_shape[:2],
                                 do_random_crop=False,
                                 use_bounding_boxes=use_bounding_boxes)
 
-model = simpler_CNN(input_shape, num_classes)
-model.compile(optimizer='adam',
-            loss='categorical_crossentropy',
-            metrics=['accuracy'])
-print(model.summary())
+batch_data = next(image_generator.flow('demo'))
 
-model_names = trained_models_path + '.{epoch:02d}-{val_loss:.2f}.hdf5'
-model_checkpoint = ModelCheckpoint(model_names,
-                                   monitor='val_loss',
-                                   verbose=1,
-                                   save_best_only=False,
-                                   save_weights_only=False)
+batch_images = batch_data[0]['image_array_input']
+batch_classes = batch_data[1]['predictions']
 
-csv_logger = CSVLogger('log_files/classifier_training.log')
-model.fit_generator(image_generator.flow(mode='train'),
-                    #steps_per_epoch=int(len(train_keys)/batch_size),
-                    steps_per_epoch=200,
-                    epochs=num_epochs, verbose=1,
-                    callbacks=[csv_logger, model_checkpoint],
-                    validation_data= image_generator.flow('val'),
-                    validation_steps=int(len(val_keys)/batch_size))
-
+for image_arg in range(batch_size):
+    image = batch_images[image_arg]
+    label = np.argmax(batch_classes[image_arg])
+    display_image(image, label)

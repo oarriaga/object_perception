@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.misc import imread
 from scipy.misc import imresize
-
+from random import shuffle
 
 def get_labels(dataset_name):
     if dataset_name == 'german_open_2017':
@@ -13,6 +13,15 @@ def get_labels(dataset_name):
                 14:'banana_milk'}
     else:
         raise Exception('Invalid dataset name')
+
+def display_batch(batch_data):
+    batch_size = len(batch_data)
+    batch_images = batch_data[0]['iamge_array_input']
+    batch_classes = batch_data[1]['predcitions']
+    for image_arg in range(batch_size):
+        image = batch_images[image_arg]
+        label = np.argmax(batch_classes[image_arg])
+        display_image(image, label)
 
 def preprocess_input(images):
     """ preprocess input image to the CNN
@@ -27,16 +36,21 @@ def _imread(image_name):
 def _imresize(image_array, size):
         return imresize(image_array, size)
 
-def split_data(ground_truth_data, training_ratio=.8):
+def split_data(ground_truth_data, training_ratio=.8, do_shuffle=False):
     ground_truth_keys = sorted(ground_truth_data.keys())
+    if do_shuffle == True:
+        shuffle(ground_truth_keys)
+
     num_train = int(round(training_ratio * len(ground_truth_keys)))
     train_keys = ground_truth_keys[:num_train]
     validation_keys = ground_truth_keys[num_train:]
     return train_keys, validation_keys
 
-def display_image(image_array):
+def display_image(image_array, title=None):
     image_array =  np.squeeze(image_array).astype('uint8')
     plt.imshow(image_array)
+    if title != None:
+        plt.title(title)
     plt.show()
 
 def to_categorical(integer_classes, num_classes=2):

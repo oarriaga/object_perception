@@ -26,9 +26,10 @@ class ImageGenerator(object):
                 lighting_std=0.5,
                 horizontal_flip_probability=0.5,
                 vertical_flip_probability=0.5,
-                do_crop=False,
+                do_random_crop=False,
                 zoom_range=[0.5, 1.5],
-                translation_factor=.3):
+                translation_factor=.3,
+                use_bounding_boxes=False):
 
         self.ground_truth_data = ground_truth_data
         self.ground_truth_transformer = ground_truth_transformer
@@ -50,9 +51,10 @@ class ImageGenerator(object):
         self.lighting_std = lighting_std
         self.horizontal_flip_probability = horizontal_flip_probability
         self.vertical_flip_probability = vertical_flip_probability
-        self.do_crop = do_crop
+        self.do_random_crop = do_random_crop
         self.zoom_range = zoom_range
         self.translation_factor = translation_factor
+        self.use_bounding_boxes = use_bounding_boxes
 
     def random_crop(self, image_array):
         """IMPORTANT: random crop only works for classification since the
@@ -165,6 +167,15 @@ class ImageGenerator(object):
 
         return image_array, box_corners
 
+    def _crop_image(self, image_array, bounding_box_coordinates):
+        x_min = bounding_box_coordinates[0]
+        y_min = bounding_box_coordinates[1]
+        x_max = bounding_box_coordinates[2]
+        y_max = bounding_box_coordinates[3]
+        cropped_array = image_array[y_min:y_max,x_min:x_max,:]
+        return cropped_array
+
+
     def preprocess_images(self, image_array):
         return preprocess_input(image_array)
 
@@ -184,15 +195,24 @@ class ImageGenerator(object):
                 for key in keys:
                     image_path = self.path_prefix + key
                     image_array = imread(image_path)
-                    image_array = imresize(image_array, self.image_size)
 
                     num_image_channels = len(image_array.shape)
                     if num_image_channels != 3:
                         continue
 
                     ground_truth = self.ground_truth_data[key]
+                    if self.use_bounding_boxes:
+                        #HOT FIX (same hack as below, it considers one object per image)
+                        #ground_truth = np.squeeze(ground_truth).astype('int')
+                        #print(ground_truth)
+                        #HACK IS STILL THERE WITH THE 0
+                        bounding_box_coordinates = ground_truth[0, 0:4].astype('int')
+                        image_array = self._crop_image(image_array,
+                                            bounding_box_coordinates)
 
-                    if self.do_crop:
+                    image_array = imresize(image_array, self.image_size)
+
+                    if self.do_random_crop:
                         image_array = self.random_crop(image_array)
                     image_array = image_array.astype('float32')
                     #ground_truth = self.ground_truth_data[key].copy()
@@ -212,8 +232,17 @@ class ImageGenerator(object):
                     if len(targets) == self.batch_size:
                         inputs = np.asarray(inputs)
                         targets = np.asarray(targets)
-                        # this will not work for boxes
-                        targets = to_categorical(targets)
+                        # this will not work for boxes:
+                        # modified so that it could work 
+                        # but untested
+                        if self.use_bounding_boxes == False:
+                            targets = to_categorical(targets)
+                        else:
+                            targets = targets[:, :, 4:]
+                            # this is a HACK I believe the second dimension
+                            # is for every object in the the same image.
+                            targets = np.squeeze(targets)
+                            #bounding_boxes = targets[:, :, :4]
                         if mode == 'train' or mode == 'val':
                             inputs = self.preprocess_images(inputs)
                             yield self._wrap_in_dictionary(inputs, targets)

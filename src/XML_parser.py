@@ -15,11 +15,16 @@ class XMLParser(object):
         num_objects refers to the number of objects in that specific image
     """
 
-    def __init__(self, data_path, background_id=None, class_names=None, dataset_name=None):
+    def __init__(self, data_path, background_id=None, class_names=None, dataset_name=None,
+                suffix='.jpg', use_bounding_boxes=False):
         self.path_prefix = data_path
         self.background_id = background_id
         if class_names == None:
             self.arg_to_class = get_labels(dataset_name='german_open_2017')
+            self.class_to_arg = {value: key for key, value
+                             in self.arg_to_class.items()}
+            self.class_names = list(self.class_to_arg.keys())
+            self.suffix = suffix
         else:
             if background_id != None and background_id != -1:
                 class_names.insert(background_id, 'background')
@@ -29,9 +34,10 @@ class XMLParser(object):
             self.arg_to_class = dict(zip(keys, class_names))
             self.class_names = class_names
 
-        self.class_to_arg = {value: key for key, value
-                             in self.arg_to_class.items()}
+        #consider adding the suffix here as well
+        #self.suffix = suffix
         self.data = dict()
+        self.use_bounding_boxes = use_bounding_boxes
         self._preprocess_XML()
 
     def get_data(self):
@@ -39,14 +45,24 @@ class XMLParser(object):
 
     def _preprocess_XML(self):
         filenames = os.listdir(self.path_prefix)
+        num_files = len(filenames)
+        if num_files == 0:
+            raise Exception('empty directory')
+        else:
+            print('Number of files founded in directory:', num_files)
+        print(self.class_names)
         for filename in filenames:
             tree = ElementTree.parse(self.path_prefix + filename)
             root = tree.getroot()
             bounding_boxes = []
             one_hot_classes = []
             size_tree = root.find('size')
-            width = float(size_tree.find('width').text)
-            height = float(size_tree.find('height').text)
+            if self.use_bounding_boxes == False:
+                width = float(size_tree.find('width').text)
+                height = float(size_tree.find('height').text)
+            else:
+                width = 1.0
+                height = 1.0
             for object_tree in root.findall('object'):
                 class_name = object_tree.find('name').text
                 if class_name in self.class_names:
@@ -62,6 +78,7 @@ class XMLParser(object):
             if len(one_hot_classes) == 0:
                 continue
             image_name = root.find('filename').text
+            image_name = image_name + self.suffix
             bounding_boxes = np.asarray(bounding_boxes)
             one_hot_classes = np.asarray(one_hot_classes)
             image_data = np.hstack((bounding_boxes, one_hot_classes))
