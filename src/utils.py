@@ -6,8 +6,11 @@ from scipy.misc import imresize
 
 def get_labels(dataset_name):
     if dataset_name == 'german_open_2017':
-        return {0:'angry',1:'disgust',2:'sad',3:'happy',
-                    4:'sad',5:'surprise',6:'neutral'}
+        return {0:'cereal',1:'coffeecup',2:'coke',3:'cornflakes',
+                4:'party_cracker',5:'peas',6:'tomato_paste',
+                7:'water', 8:'potato_soup', 9:'pringles',
+                10:'salt',11:'crackers', 12:'lemon', 13:'orange_drink',
+                14:'banana_milk'}
     else:
         raise Exception('Invalid dataset name')
 
