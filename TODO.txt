@@ -1,0 +1,7 @@
+1. Use the prior boxes to create default boxes.
+2. Use the assign class to see which boxes match the ground truth with an intersection over union.
+3. With a ratio of [1, 3] use the negative boxes to sample background classification.
+4. Train a classifier using all this images along with the image generator.
+    - Try using HOG features.
+5. Use your classifier as fully-convolution-neural-network using Gaussian pyramids.
+
