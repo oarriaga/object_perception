@@ -119,12 +119,10 @@ class ImageGenerator(object):
 
     def _denormalize_box(self, box_coordinates, original_image_size):
         original_image_width, original_image_height = original_image_size
-        print(box_coordinates)
         box_coordinates[:, 0] = box_coordinates[:, 0] * original_image_width
         box_coordinates[:, 1] = box_coordinates[:, 1] * original_image_height
         box_coordinates[:, 2] = box_coordinates[:, 2] * original_image_width
         box_coordinates[:, 3] = box_coordinates[:, 3] * original_image_height
-        print(box_coordinates)
         return box_coordinates
 
     def _mangage_keys(self, mode):
@@ -153,14 +151,18 @@ class ImageGenerator(object):
     def _crop_bounding_boxes(self, image_array, assigned_data):
         data = self._select_negative_samples(assigned_data)
         data = np.concatenate(data, axis=0)
+        print('data_shape:', len(data.shape))
         images = []
         classes = []
         for object_arg in range(len(data)):
             object_data = data[object_arg]
-            image_array = self._crop_bounding_box(image_array, object_data)
-            if 0 in image_array.shape:
+            cropped_array = self._crop_bounding_box(image_array, object_data)
+            print('image_array.shape', image_array.shape)
+            if 0 in cropped_array.shape:
+                print('rejected_image')
                 continue
-            image_array = resize_image(image_array, self.image_size)
+            cropped_array = resize_image(cropped_array, self.image_size)
+            images.append(cropped_array)
             classes.append(data[object_arg][4:])
         return images, classes
 
@@ -170,7 +172,9 @@ class ImageGenerator(object):
         x_max = int(box_data[2])
         y_max = int(box_data[3])
         print(x_min, y_min, x_max, y_max)
-        cropped_array = image_array[x_min:x_max, y_min:y_max].copy()
+        print('image_array.shape', image_array.shape)
+        cropped_array = image_array[x_min:x_max, y_min:y_max]#.copy()
+        print('cropped_array.shape', cropped_array.shape)
         return cropped_array
 
     def flow(self, mode='train'):
@@ -183,18 +187,22 @@ class ImageGenerator(object):
                     image_array = read_image(image_path)
                     original_image_size = image_array.shape[:2]
                     #image_array = resize_image(image_array, self.image_size)
-                    box_data = self.ground_truth_data[key].copy()
+                    box_data = self.ground_truth_data[key]#.copy()
                     if mode == 'train' or mode == 'demo':
-                        image_array, box_data = self.transform(image_array,
+                        image_array, box_data = self.transform(image_array, #.copy(),
                                                                   box_data)
                     assigned_data = self.box_manager.assign_boxes(box_data)
                     print('original_image_size', original_image_size)
                     assigned_data = self._denormalize_box(assigned_data,
                                                     original_image_size)
-                    image_arrays, classes = self._crop_bounding_boxes(
+                    print('read_image_array.shape', image_array.shape)
+                    images, classes = self._crop_bounding_boxes(
                                             image_array, assigned_data)
-                    inputs = inputs + image_arrays
+                    print('images_len', len(images))
+                    print('len_inputs before: ', len(inputs))
+                    inputs = inputs + images
                     targets = targets + classes
+                    print('len_inputs after: ', len(inputs))
                     #inputs.append(image_array)
                     #targets.append(box_data)
                     # weird!!!!
@@ -217,6 +225,8 @@ class ImageGenerator(object):
 if __name__ == "__main__":
     import random
 
+    import matplotlib.pyplot as plt
+
     from prior_box_creator import PriorBoxCreator
     from prior_box_manager import PriorBoxManager
     from XML_parser import XMLParser
@@ -224,6 +234,7 @@ if __name__ == "__main__":
 
     data_path = '../datasets/german_open_dataset/annotations/'
     data_manager = XMLParser(data_path)
+    arg_to_class = data_manager.arg_to_class
     class_names = data_manager.class_names
     num_classes = len(class_names)
     print('Found classes: \n', class_names)
@@ -238,6 +249,7 @@ if __name__ == "__main__":
     object_mask = assigned_boxes[:, 4] != 1
     object_data = assigned_boxes[object_mask]
     print('Number of box assigned to different objects:', len(object_data))
+
     batch_size = 1
     image_size=(300, 300)
     validation_split = .2
@@ -245,7 +257,14 @@ if __name__ == "__main__":
     train_keys, val_keys = split_data(ground_truth_data, validation_split)
     image_generator = ImageGenerator(ground_truth_data, prior_box_manager,
                     batch_size, image_size, train_keys, val_keys, path_prefix)
-    val_key = image_generator.validation_keys[0]
     output = next(image_generator.flow('demo'))
+    num_objects = len(output[0]['input_1'])
+    for object_arg in range(num_objects):
+        image_array = np.squeeze(output[0]['input_1'][object_arg])
+        class_arg = np.argmax(output[1]['predictions'][object_arg])
+        class_name = arg_to_class[class_arg]
+        plt.title(class_name)
+        plt.imshow(image_array)
+        plt.show()
 
 
