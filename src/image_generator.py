@@ -5,7 +5,6 @@ from utils.keras_utils import preprocess_images
 from utils.utils import resize_image
 from utils.utils import read_image
 
-
 class ImageGenerator(object):
     """ Image generator with saturation, brightness, lighting, contrast,
     horizontal flip and vertical flip transformations. It supports
@@ -17,7 +16,7 @@ class ImageGenerator(object):
         - Finish support for not using bounding_boxes.
     """
     def __init__(self, ground_truth_data, box_manager, batch_size, image_size,
-                train_keys, validation_keys, path_prefix=None,
+                train_keys, validation_keys, path_prefix=None, suffix='.jpg',
                 negative_positive_ratio = 3,
                 saturation_var=0.5,
                 brightness_var=0.5,
@@ -29,6 +28,7 @@ class ImageGenerator(object):
                 crop_area_range=[0.75, 1.0],
                 aspect_ratio_range=[3./4., 4./3.]):
 
+        self.negative_positive_ratio = negative_positive_ratio
         self.ground_truth_data = ground_truth_data
         self.box_manager = box_manager
         self.batch_size = batch_size
@@ -36,6 +36,7 @@ class ImageGenerator(object):
         self.train_keys = train_keys
         self.validation_keys = validation_keys
         self.image_size = image_size
+        self.suffix = suffix
         self.color_jitter = []
         if saturation_var:
             self.saturation_var = saturation_var
@@ -118,10 +119,12 @@ class ImageGenerator(object):
 
     def _denormalize_box(self, box_coordinates, original_image_size):
         original_image_width, original_image_height = original_image_size
+        print(box_coordinates)
         box_coordinates[:, 0] = box_coordinates[:, 0] * original_image_width
         box_coordinates[:, 1] = box_coordinates[:, 1] * original_image_height
         box_coordinates[:, 2] = box_coordinates[:, 2] * original_image_width
         box_coordinates[:, 3] = box_coordinates[:, 3] * original_image_height
+        print(box_coordinates)
         return box_coordinates
 
     def _mangage_keys(self, mode):
@@ -141,7 +144,7 @@ class ImageGenerator(object):
         background_data = assigned_data[background_mask]
         num_background_boxes = len(background_data)
         random_args = np.random.permutation(num_background_boxes)
-        num_negative_boxes = self.positive_negative_ratio * num_assigned_boxes
+        num_negative_boxes = self.negative_positive_ratio * num_assigned_boxes
         random_args = np.unravel_index(random_args[:num_negative_boxes],
                                         dims=len(background_data))
         background_data = background_data[random_args]
@@ -155,15 +158,18 @@ class ImageGenerator(object):
         for object_arg in range(len(data)):
             object_data = data[object_arg]
             image_array = self._crop_bounding_box(image_array, object_data)
+            if 0 in image_array.shape:
+                continue
             image_array = resize_image(image_array, self.image_size)
             classes.append(data[object_arg][4:])
         return images, classes
 
     def _crop_bounding_box(self,image_array, box_data):
-        x_min = box_data[:, 0]
-        y_min = box_data[:, 1]
-        x_max = box_data[:, 2]
-        y_max = box_data[:, 3]
+        x_min = int(box_data[0])
+        y_min = int(box_data[1])
+        x_max = int(box_data[2])
+        y_max = int(box_data[3])
+        print(x_min, y_min, x_max, y_max)
         cropped_array = image_array[x_min:x_max, y_min:y_max].copy()
         return cropped_array
 
@@ -173,7 +179,7 @@ class ImageGenerator(object):
                 inputs = []
                 targets = []
                 for key in keys:
-                    image_path = self.path_prefix + key
+                    image_path = self.path_prefix + key + self.suffix
                     image_array = read_image(image_path)
                     original_image_size = image_array.shape[:2]
                     #image_array = resize_image(image_array, self.image_size)
@@ -182,6 +188,7 @@ class ImageGenerator(object):
                         image_array, box_data = self.transform(image_array,
                                                                   box_data)
                     assigned_data = self.box_manager.assign_boxes(box_data)
+                    print('original_image_size', original_image_size)
                     assigned_data = self._denormalize_box(assigned_data,
                                                     original_image_size)
                     image_arrays, classes = self._crop_bounding_boxes(
@@ -190,7 +197,8 @@ class ImageGenerator(object):
                     targets = targets + classes
                     #inputs.append(image_array)
                     #targets.append(box_data)
-                    if len(targets) == self.batch_size:
+                    # weird!!!!
+                    if len(targets) >= self.batch_size:
                         inputs = np.asarray(inputs)
                         targets = np.asarray(targets)
                         if mode == 'train' or mode == 'val':
@@ -204,3 +212,40 @@ class ImageGenerator(object):
     def _wrap_in_dictionary(self, image_array, targets):
         return [{'input_1':image_array},
                 {'predictions':targets}]
+
+
+if __name__ == "__main__":
+    import random
+
+    from prior_box_creator import PriorBoxCreator
+    from prior_box_manager import PriorBoxManager
+    from XML_parser import XMLParser
+    from utils.utils import split_data
+
+    data_path = '../datasets/german_open_dataset/annotations/'
+    data_manager = XMLParser(data_path)
+    class_names = data_manager.class_names
+    num_classes = len(class_names)
+    print('Found classes: \n', class_names)
+    ground_truth_data = data_manager.get_data()
+    sampled_key =  random.choice(list(ground_truth_data.keys()))
+    sampled_data = ground_truth_data[sampled_key]
+
+    prior_box_creator = PriorBoxCreator(image_shape=(300, 300))
+    prior_boxes = prior_box_creator.create_boxes()
+    prior_box_manager = PriorBoxManager(prior_boxes, num_classes)
+    assigned_boxes = prior_box_manager.assign_boxes(sampled_data)
+    object_mask = assigned_boxes[:, 4] != 1
+    object_data = assigned_boxes[object_mask]
+    print('Number of box assigned to different objects:', len(object_data))
+    batch_size = 1
+    image_size=(300, 300)
+    validation_split = .2
+    path_prefix = '../datasets/german_open_dataset/images/'
+    train_keys, val_keys = split_data(ground_truth_data, validation_split)
+    image_generator = ImageGenerator(ground_truth_data, prior_box_manager,
+                    batch_size, image_size, train_keys, val_keys, path_prefix)
+    val_key = image_generator.validation_keys[0]
+    output = next(image_generator.flow('demo'))
+
+
