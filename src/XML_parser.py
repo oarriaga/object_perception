@@ -26,6 +26,7 @@ class XMLParser(object):
         self.class_names = class_names
         if self.class_names is None and self.dataset_name is None:
             self.class_names = self._find_class_names()
+            self.class_names = ['background'] + self.class_names
         elif self.class_names is None and self.dataset_name is not None:
             self.class_names = get_class_names(self.dataset_name)
 
