@@ -1,68 +1,70 @@
-import numpy as np
 import os
 from xml.etree import ElementTree
-from utils import get_labels
+import numpy as np
+from utils.utils import get_class_names
 
 class XMLParser(object):
-    """ Preprocess the VOC2007 xml annotations data.
+    """ Preprocess the any data annotated in XML format.
+
+    # TODO: Add background label
 
     # Arguments
-        data_path: Data path to VOC2007 annotations
+        data_path: Data path to XML annotations
 
     # Return
         data: Dictionary which keys correspond to the image names
         and values are numpy arrays of shape (num_objects, 4 + num_classes)
         num_objects refers to the number of objects in that specific image
+        4 + num_classes correspond to the x_min, y_min, x_max and y_max
+        bounding_boxes coordinates respectively followed by a one-hot-encoding
+        of the class.
     """
 
-    def __init__(self, data_path, background_id=None, class_names=None, dataset_name=None,
-                suffix='.jpg', use_bounding_boxes=False):
+    def __init__(self, data_path, class_names=None, dataset_name=None):
         self.path_prefix = data_path
-        self.background_id = background_id
-        if class_names == None:
-            self.arg_to_class = get_labels(dataset_name='german_open_2017')
-            self.class_to_arg = {value: key for key, value
+        self.dataset_name = dataset_name
+        self.class_names = class_names
+        if self.class_names is None and self.dataset_name is None:
+            self.class_names = self._find_class_names()
+        elif self.class_names is None and self.dataset_name is not None:
+            self.class_names = get_class_names(self.dataset_name)
+
+        self.num_classes = len(self.class_names)
+
+        class_keys = np.arange(self.num_classes)
+        self.arg_to_class = dict(zip(class_keys, self.class_names))
+        self.class_to_arg = {value: key for key, value
                              in self.arg_to_class.items()}
-            self.class_names = list(self.class_to_arg.keys())
-            self.suffix = suffix
-        else:
-            if background_id != None and background_id != -1:
-                class_names.insert(background_id, 'background')
-            elif background_id == -1:
-                class_names.append('background')
-            keys = np.arange(len(class_names))
-            self.arg_to_class = dict(zip(keys, class_names))
-            self.class_names = class_names
+        self._parse_XML_files()
 
-        #consider adding the suffix here as well
-        #self.suffix = suffix
-        self.data = dict()
-        self.use_bounding_boxes = use_bounding_boxes
-        self._preprocess_XML()
-
-    def get_data(self):
-        return self.data
-
-    def _preprocess_XML(self):
+    def _find_class_names(self):
+        found_classes = []
         filenames = os.listdir(self.path_prefix)
-        num_files = len(filenames)
-        if num_files == 0:
-            raise Exception('empty directory')
-        else:
-            print('Number of files founded in directory:', num_files)
-        print(self.class_names)
+        for filename in filenames:
+            tree = ElementTree.parse(self.path_prefix + filename)
+            root = tree.getroot()
+            for object_tree in root.findall('object'):
+                class_name = object_tree.find('name').text
+                if class_name not in found_classes:
+                    found_classes.append(class_name)
+        return found_classes
+
+    def get_data(self, class_names=None):
+        if class_names is not None:
+            self.class_names = class_names
+        return self._parse_XML_files()
+
+    def _parse_XML_files(self):
+        data = dict()
+        filenames = os.listdir(self.path_prefix)
         for filename in filenames:
             tree = ElementTree.parse(self.path_prefix + filename)
             root = tree.getroot()
             bounding_boxes = []
             one_hot_classes = []
             size_tree = root.find('size')
-            if self.use_bounding_boxes == False:
-                width = float(size_tree.find('width').text)
-                height = float(size_tree.find('height').text)
-            else:
-                width = 1.0
-                height = 1.0
+            width = float(size_tree.find('width').text)
+            height = float(size_tree.find('height').text)
             for object_tree in root.findall('object'):
                 class_name = object_tree.find('name').text
                 if class_name in self.class_names:
@@ -78,26 +80,27 @@ class XMLParser(object):
             if len(one_hot_classes) == 0:
                 continue
             image_name = root.find('filename').text
-            image_name = image_name + self.suffix
             bounding_boxes = np.asarray(bounding_boxes)
             one_hot_classes = np.asarray(one_hot_classes)
             image_data = np.hstack((bounding_boxes, one_hot_classes))
             if len(bounding_boxes.shape) == 1:
                 image_data = np.expand_dims(image_data, axis=0)
-            self.data[image_name] = image_data
+            data[image_name] = image_data
+        return data
 
-    def _to_one_hot(self, name):
-        num_classes = len(self.class_to_arg)
-        one_hot_vector = [0] * num_classes
-        class_arg = self.class_to_arg[name]
+    def _to_one_hot(self, class_name):
+        one_hot_vector = [0] * self.num_classes
+        class_arg = self.class_to_arg[class_name]
         one_hot_vector[class_arg] = 1
         return one_hot_vector
 
 if __name__ == '__main__':
-    data_path = '../../datasets/VOCdevkit/VOC2007/Annotations/'
-    classes = ['bottle', 'sofa', 'tvmonitor', 'diningtable', 'chair']
-    xml_parser = XMLParser(data_path, background_id=None, class_names=classes)
-    ground_truths = xml_parser.get_data()
-    print(len(ground_truths.keys()))
-    print(xml_parser.arg_to_class)
-
+    data_path = '../datasets/german_open_dataset/annotations/'
+    data_manager = XMLParser(data_path)
+    class_names = data_manager.class_names
+    print('Found classes: \n', class_names)
+    ground_truth_data = data_manager.get_data()
+    print('Number of ground truth samples:', len(ground_truth_data))
+    print('Using classes: \n', class_names[0:3])
+    ground_truth_data = data_manager.get_data(class_names[0:3])
+    print('Number of ground truth samples:', len(ground_truth_data))
