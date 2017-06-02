@@ -1,16 +1,14 @@
 from scipy.misc import imread
 from scipy.misc import imresize
 
-def split_data(train_data, validation_split=.2):
-    num_train = int(round((1 - validation_split) * len(train_data[0])))
-    train_images, train_classes = train_data
-    train_images = train_images[:num_train]
-    train_classes = train_classes[:num_train]
-    validation_images = train_data[num_train:]
-    validation_classes = train_data[num_train:]
-    train_data = (train_images, train_classes)
-    validation_data = (validation_images, validation_classes)
-    return train_data, validation_data
+def split_data(ground_truths, validation_split=.2):
+    ground_truth_keys = sorted(ground_truths.keys())
+    training_split = 1 - validation_split
+    num_train = int(round(training_split * len(ground_truth_keys)))
+    train_keys = ground_truth_keys[:num_train]
+    validation_keys = ground_truth_keys[num_train:]
+    return train_keys, validation_keys
+
 
 def get_class_names(dataset_name='VOC2007'):
     if dataset_name == 'VOC2007':
