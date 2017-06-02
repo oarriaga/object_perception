@@ -1,3 +1,4 @@
 datasets/
 trained_models/
+*.pyc
 src/__pycache__
