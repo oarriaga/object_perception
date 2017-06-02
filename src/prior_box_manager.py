@@ -52,7 +52,7 @@ class PriorBoxManager(object):
         return assigned_boxes.ravel()
 
     def assign_boxes(self, ground_truth_data):
-        assignments = np.zeros((self.num_priors, 4 + self.num_classes + 8))
+        assignments = np.zeros((self.num_priors, 4 + self.num_classes))
         assignments[:, 4 + self.background_id] = 1.0
         num_objects_in_image = len(ground_truth_data)
         if num_objects_in_image == 0:
@@ -70,8 +70,10 @@ class PriorBoxManager(object):
                                                 np.arange(num_assigned_boxes),
                                                 :4]
         assignments[:, 4][best_iou_mask] = 0
-        assignments[:, 5:-8][best_iou_mask] = ground_truth_data[best_iou_indices, 5:]
-        assignments[:, -8][best_iou_mask] = 1
+        # check the following two lines
+        background_mask = np.logical_not(best_iou)
+        assignments[:, :4][background_mask] = self.prior_boxes[background_mask, :4]
+        assignments[:, 5:][best_iou_mask] = ground_truth_data[best_iou_indices, 5:]
         return assignments
 
 if __name__ == "__main__":
@@ -93,6 +95,8 @@ if __name__ == "__main__":
     prior_boxes = prior_box_creator.create_boxes()
     prior_box_manager = PriorBoxManager(prior_boxes, num_classes)
     assigned_boxes = prior_box_manager.assign_boxes(sampled_data)
+    print('assigned_boxes: \n', assigned_boxes)
     object_mask = assigned_boxes[:, 4] != 1
     object_data = assigned_boxes[object_mask]
+    print('object_data: \n', object_data)
     print('Number of box assigned to different objects:', len(object_data))
