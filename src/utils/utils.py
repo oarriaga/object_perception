@@ -1,3 +1,6 @@
+from scipy.misc import imread
+from scipy.misc import imresize
+
 def split_data(train_data, validation_split=.2):
     num_train = int(round((1 - validation_split) * len(train_data[0])))
     train_images, train_classes = train_data
@@ -24,3 +27,9 @@ def scheduler(epoch, decay=0.9, base_learning_rate=3e-4):
 
 def get_arg_to_class(class_names):
     return dict(zip(list(range(len(class_names))), class_names))
+
+def read_image(file_name):
+    return imread(file_name)
+
+def resize_image(image_array, size):
+    return imresize(image_array, size)
