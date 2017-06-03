@@ -53,6 +53,12 @@ class XMLParser(object):
     def get_data(self, class_names=None):
         if class_names is not None:
             self.class_names = class_names
+            assert 'background' in self.class_names
+            self.num_classes = len(self.class_names)
+            class_keys = np.arange(self.num_classes)
+            self.arg_to_class = dict(zip(class_keys, self.class_names))
+            self.class_to_arg = {value: key for key, value
+                             in self.arg_to_class.items()}
         return self._parse_XML_files()
 
     def _parse_XML_files(self):
