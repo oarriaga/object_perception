@@ -11,7 +11,7 @@ class ImageGenerator(object):
     """
     def __init__(self, ground_truth_data, box_manager, batch_size, image_size,
                 train_keys, validation_keys, path_prefix=None, suffix='.jpg',
-                negative_positive_ratio = 2,
+                negative_positive_ratio = 1,
                 saturation_var=0.5,
                 brightness_var=0.5,
                 contrast_var=0.5,
@@ -128,12 +128,12 @@ class ImageGenerator(object):
         box_coordinates[:, 3] = box_coordinates[:, 3] * original_image_height
         return box_coordinates
 
-    def _select_negative_samples(self, assigned_data):
+    def _select_samples(self, assigned_data):
         object_mask = assigned_data[:, 4] != 1
-        object_data = assigned_data[object_mask]
-        num_assigned_boxes = len(object_data)
         background_mask = np.logical_not(object_mask)
+        object_data = assigned_data[object_mask]
         background_data = assigned_data[background_mask]
+        num_assigned_boxes = len(object_data)
         num_background_boxes = len(background_data)
         random_args = np.random.permutation(num_background_boxes)
         num_negative_boxes = self.negative_positive_ratio * num_assigned_boxes
@@ -143,7 +143,7 @@ class ImageGenerator(object):
         return object_data, background_data
 
     def _crop_bounding_boxes(self, image_array, assigned_data):
-        data = self._select_negative_samples(assigned_data)
+        data = self._select_samples(assigned_data)
         data = np.concatenate(data, axis=0)
         images = []
         classes = []
@@ -164,6 +164,14 @@ class ImageGenerator(object):
         y_max = int(box_data[3])
         cropped_array = image_array[y_min:y_max, x_min:x_max]
         return cropped_array
+
+    def _shuffle_together(self, array_1, array_2):
+        assert len(array_1) == len(array_2)
+        num_samples = len(array_1)
+        random_args = np.random.permutation(num_samples)
+        randomized_list_1 = array_1[random_args]
+        randomized_list_2 = array_2[random_args]
+        return randomized_list_1, randomized_list_2
 
     def flow(self, mode='train'):
             while True:
@@ -189,6 +197,8 @@ class ImageGenerator(object):
                     if len(targets) >= self.batch_size:
                         inputs = np.asarray(inputs)
                         targets = np.asarray(targets)
+                        inputs, targets = self._shuffle_together(inputs,
+                                                                targets)
                         if mode == 'train' or mode == 'val':
                             inputs = preprocess_images(inputs)
                             yield self._wrap_in_dictionary(inputs, targets)
@@ -203,47 +213,54 @@ class ImageGenerator(object):
 
 
 if __name__ == "__main__":
-    import random
-
     import matplotlib.pyplot as plt
 
     from prior_box_creator import PriorBoxCreator
     from prior_box_manager import PriorBoxManager
-    from XML_parser import XMLParser
     from utils.utils import split_data
+    from XML_parser import XMLParser
 
-    data_path = '../datasets/german_open_dataset/annotations/'
-    data_manager = XMLParser(data_path)
+    # parameters
+    batch_size = 1
+    num_epochs = 10000
+    image_shape=(70, 50, 3)
+    validation_split = .2
+    dataset_name = 'VOC2007'
+    dataset_root_path = '../datasets/' + dataset_name + '/'
+    annotations_path =  dataset_root_path + 'annotations/'
+    image_prefix = dataset_root_path + 'images/'
+    trained_models_path = '../trained_models/classification/simple_CNN'
+    log_file_path = 'classification.log'
+
+    # loading data
+    data_manager = XMLParser(annotations_path)
     arg_to_class = data_manager.arg_to_class
     class_names = data_manager.class_names
     num_classes = len(class_names)
     print('Found classes: \n', class_names)
-    ground_truth_data = data_manager.get_data()
-    sampled_key =  random.choice(list(ground_truth_data.keys()))
-    sampled_data = ground_truth_data[sampled_key]
+    #ground_truth_data = data_manager.get_data()
+    ground_truth_data = data_manager.get_data(['background', 'bottle'])
+    print('Number of real samples:', len(ground_truth_data))
 
-    prior_box_creator = PriorBoxCreator(image_shape=(300, 300))
+    # creating prior boxes
+    prior_box_creator = PriorBoxCreator()
     prior_boxes = prior_box_creator.create_boxes()
-    prior_box_manager = PriorBoxManager(prior_boxes, num_classes)
-    assigned_boxes = prior_box_manager.assign_boxes(sampled_data)
-    object_mask = assigned_boxes[:, 4] != 1
-    object_data = assigned_boxes[object_mask]
-    print('Number of box assigned to different objects:', len(object_data))
+    prior_box_manager = PriorBoxManager(prior_boxes, num_classes, overlap_threshold=.5)
 
-    batch_size = 1
-    image_size=(100, 100)
-    validation_split = .2
-    path_prefix = '../datasets/german_open_dataset/images/'
     train_keys, val_keys = split_data(ground_truth_data, validation_split)
     image_generator = ImageGenerator(ground_truth_data, prior_box_manager,
-                    batch_size, image_size, train_keys, val_keys, path_prefix,
-                                                vertical_flip_probability=0)
+                                    batch_size, image_shape[0:2], train_keys,
+                                    val_keys, image_prefix,
+                                    vertical_flip_probability=0,
+                                    suffix='')
+
     output = next(image_generator.flow('demo'))
-    num_objects = len(output[0]['input_1'])
+    num_objects = len(output[0]['image_array_input'])
     for object_arg in range(num_objects):
-        image_array = np.squeeze(output[0]['input_1'][object_arg])
+        image_array = np.squeeze(output[0]['image_array_input'][object_arg])
         class_arg = np.argmax(output[1]['predictions'][object_arg])
+        print(output[1]['predictions'][object_arg])
         class_name = arg_to_class[class_arg]
         plt.title(class_name)
-        plt.imshow(image_array)
+        plt.imshow(image_array.astype('uint8'))
         plt.show()
