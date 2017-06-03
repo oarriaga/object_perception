@@ -7,13 +7,7 @@ from utils.utils import read_image
 
 class ImageGenerator(object):
     """ Image generator with saturation, brightness, lighting, contrast,
-    horizontal flip and vertical flip transformations. It supports
-    bounding boxes coordinates.
-
-    TODO:
-        - Finish preprocess_images method.
-        - Add random crop method.
-        - Finish support for not using bounding_boxes.
+    horizontal flip and vertical flip transformations.
     """
     def __init__(self, ground_truth_data, box_manager, batch_size, image_size,
                 train_keys, validation_keys, path_prefix=None, suffix='.jpg',
@@ -127,7 +121,6 @@ class ImageGenerator(object):
         return keys
 
     def _denormalize_box(self, box_coordinates, original_image_size):
-        print(original_image_size)
         original_image_height, original_image_width = original_image_size
         box_coordinates[:, 0] = box_coordinates[:, 0] * original_image_width
         box_coordinates[:, 1] = box_coordinates[:, 1] * original_image_height
@@ -152,15 +145,12 @@ class ImageGenerator(object):
     def _crop_bounding_boxes(self, image_array, assigned_data):
         data = self._select_negative_samples(assigned_data)
         data = np.concatenate(data, axis=0)
-        print('data_shape:', len(data.shape))
         images = []
         classes = []
         for object_arg in range(len(data)):
             object_data = data[object_arg]
             cropped_array = self._crop_bounding_box(image_array, object_data)
-            print('image_array.shape', image_array.shape)
             if 0 in cropped_array.shape:
-                print('rejected_image')
                 continue
             cropped_array = resize_image(cropped_array, self.image_size)
             images.append(cropped_array)
@@ -172,10 +162,7 @@ class ImageGenerator(object):
         y_min = int(box_data[1])
         x_max = int(box_data[2])
         y_max = int(box_data[3])
-        print(x_min, y_min, x_max, y_max)
-        print('image_array.shape', image_array.shape)
-        cropped_array = image_array[y_min:y_max, x_min:x_max]#.copy()
-        print('cropped_array.shape', cropped_array.shape)
+        cropped_array = image_array[y_min:y_max, x_min:x_max]
         return cropped_array
 
     def flow(self, mode='train'):
@@ -187,26 +174,18 @@ class ImageGenerator(object):
                     image_path = self.path_prefix + key + self.suffix
                     image_array = read_image(image_path)
                     original_image_size = image_array.shape[:2]
-                    #image_array = resize_image(image_array, self.image_size)
-                    box_data = self.ground_truth_data[key]#.copy()
+                    box_data = self.ground_truth_data[key]
                     if mode == 'train' or mode == 'demo':
-                        image_array, box_data = self.transform(image_array, #.copy(),
+                        image_array, box_data = self.transform(image_array,
                                                                   box_data)
                     assigned_data = self.box_manager.assign_boxes(box_data)
-                    print('original_image_size', original_image_size)
                     assigned_data = self._denormalize_box(assigned_data,
                                                     original_image_size)
-                    print('read_image_array.shape', image_array.shape)
                     images, classes = self._crop_bounding_boxes(
                                             image_array, assigned_data)
-                    print('images_len', len(images))
-                    print('len_inputs before: ', len(inputs))
                     inputs = inputs + images
                     targets = targets + classes
-                    print('len_inputs after: ', len(inputs))
-                    #inputs.append(image_array)
-                    #targets.append(box_data)
-                    # weird!!!!
+                    # batch size does not always correspond to the real batch
                     if len(targets) >= self.batch_size:
                         inputs = np.asarray(inputs)
                         targets = np.asarray(targets)
@@ -257,7 +236,8 @@ if __name__ == "__main__":
     path_prefix = '../datasets/german_open_dataset/images/'
     train_keys, val_keys = split_data(ground_truth_data, validation_split)
     image_generator = ImageGenerator(ground_truth_data, prior_box_manager,
-                    batch_size, image_size, train_keys, val_keys, path_prefix, vertical_flip_probability=0)
+                    batch_size, image_size, train_keys, val_keys, path_prefix,
+                                                vertical_flip_probability=0)
     output = next(image_generator.flow('demo'))
     num_objects = len(output[0]['input_1'])
     for object_arg in range(num_objects):
@@ -267,5 +247,3 @@ if __name__ == "__main__":
         plt.title(class_name)
         plt.imshow(image_array)
         plt.show()
-
-
