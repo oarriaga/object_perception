@@ -2,8 +2,8 @@ import numpy as np
 import pickle
 
 class PriorBoxCreator(object):
-    def __init__(self, image_shape=(300, 300)):
-        self.image_shape = image_shape
+    def __init__(self):
+        self.image_shape = (300, 300)
         self.model_configurations = self._get_model_configurations()
 
     def _get_model_configurations(self):
