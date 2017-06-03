@@ -153,7 +153,7 @@ class ImageGenerator(object):
             if 0 in cropped_array.shape:
                 continue
             cropped_array = resize_image(cropped_array, self.image_size)
-            images.append(cropped_array)
+            images.append(cropped_array.astype('float32'))
             classes.append(data[object_arg][4:])
         return images, classes
 
@@ -198,7 +198,7 @@ class ImageGenerator(object):
                         targets = []
 
     def _wrap_in_dictionary(self, image_array, targets):
-        return [{'input_1':image_array},
+        return [{'image_array_input':image_array},
                 {'predictions':targets}]
 
 
