@@ -1,4 +1,5 @@
 from keras.callbacks import CSVLogger, ModelCheckpoint
+from keras.optimizers import SGD
 
 from image_generator import ImageGenerator
 from models import simple_CNN
@@ -8,7 +9,7 @@ from utils.utils import split_data
 from XML_parser import XMLParser
 
 # parameters
-batch_size = 5
+batch_size = 1
 num_epochs = 10000
 image_shape=(48, 48, 3)
 validation_split = .2
@@ -21,12 +22,11 @@ log_file_path = 'classification.log'
 
 # loading data
 data_manager = XMLParser(annotations_path)
+ground_truth_data = data_manager.get_data(['background', 'bottle'])
+print('Number of real samples:', len(ground_truth_data))
 class_names = data_manager.class_names
 num_classes = len(class_names)
 print('Found classes: \n', class_names)
-#ground_truth_data = data_manager.get_data()
-ground_truth_data = data_manager.get_data(['background', 'bottle'])
-print('Number of real samples:', len(ground_truth_data))
 
 # creating prior boxes
 prior_box_creator = PriorBoxCreator()
@@ -41,6 +41,7 @@ image_generator = ImageGenerator(ground_truth_data, prior_box_manager,
                                 suffix='')
 
 # model parameters
+sgd = SGD(lr=0.01, momentum=0.8, decay=0.1, nesterov=True)
 model = simple_CNN(image_shape, num_classes)
 model.compile(optimizer='adam', loss='categorical_crossentropy',
                                             metrics=['accuracy'])
