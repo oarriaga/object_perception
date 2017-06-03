@@ -234,13 +234,12 @@ if __name__ == "__main__":
 
     # loading data
     data_manager = XMLParser(annotations_path)
-    arg_to_class = data_manager.arg_to_class
-    class_names = data_manager.class_names
-    num_classes = len(class_names)
-    print('Found classes: \n', class_names)
-    #ground_truth_data = data_manager.get_data()
     ground_truth_data = data_manager.get_data(['background', 'bottle'])
     print('Number of real samples:', len(ground_truth_data))
+    class_names = data_manager.class_names
+    arg_to_class = data_manager.arg_to_class
+    num_classes = len(class_names)
+    print('Found classes: \n', class_names)
 
     # creating prior boxes
     prior_box_creator = PriorBoxCreator()
